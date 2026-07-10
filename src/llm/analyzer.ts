@@ -28,10 +28,12 @@ export async function runAnalysis(question?: string): Promise<string> {
     bio || "(none)",
   ].join("\n");
 
+  // Opus 4.8 removed sampling params (temperature/top_p/top_k → 400). Steer with
+  // prompting + adaptive thinking instead, which suits this correlation task.
   const res = await anthropic.messages.create({
     model: MODELS.analysis,
     max_tokens: MAX_TOKENS.analysis,
-    temperature: 0.3,
+    thinking: { type: "adaptive" },
     system: analyzerSystemPrompt(),
     messages: [{ role: "user", content: userContent }],
   });

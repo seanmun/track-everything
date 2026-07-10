@@ -20,6 +20,7 @@ const REMINDERS: Reminder[] = [
   { cron: "0 19 * * *", text: "🍽️ Dinner log — foods + any drinks (count the beers)." },
   { cron: "0 21 * * *", text: "🌙 Bedtime routine: melatonin, collagen, magnesium, red-light glasses, screen type, grounding? Log whatever you did." },
   { cron: "30 21 * * *", text: "🧠 Evening check-in: how's your mood, energy, and any bloat right now?" },
+  { cron: "0 23 * * *", text: "👟 How many steps did you take today? Just reply with the number (e.g. \"8,200 steps\")." },
 ];
 
 /** Schedule all reminders. A send failure must never crash the process. */
