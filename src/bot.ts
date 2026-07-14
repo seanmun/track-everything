@@ -13,6 +13,7 @@ import {
   exportJson,
 } from "./services/queries.js";
 import { runAnalysis } from "./llm/analyzer.js";
+import { upcomingEvents, formatEvent } from "./services/events.js";
 import { buildAuthorizeUrl, isConnected } from "./oura/client.js";
 import { syncOura } from "./oura/sync.js";
 
@@ -46,6 +47,10 @@ Views
 • /recent [n] — last n entries (default 10)
 • /stats — counts, last weight, sleep avg, flags
 • /labs — latest bloodwork + trends
+• /agenda — upcoming calendar events
+
+Calendar
+• Just tell me an event: "dentist Thursday 3pm", "lunch w/ Sam tomorrow noon". I log it, remind you, and flag conflicts.
 
 Analysis
 • /analyze [question] — correlations
@@ -141,6 +146,11 @@ export function createBot(): Bot {
     return reply(ctx, recentReport(Number.isFinite(n) && n > 0 ? n : 10));
   });
   bot.command("stats", (ctx) => reply(ctx, statsReport()));
+  bot.command("agenda", (ctx) => {
+    const events = upcomingEvents(20);
+    if (events.length === 0) return reply(ctx, "No upcoming events. Just tell me one, e.g. \"dentist Thursday 3pm\".");
+    return reply(ctx, `Upcoming:\n${events.map((e) => `• ${formatEvent(e)}`).join("\n")}`);
+  });
   bot.command("labs", (ctx) => reply(ctx, labsReport()));
 
   bot.command("analyze", async (ctx) => {
@@ -289,6 +299,7 @@ export const BOT_COMMANDS = [
   { command: "today", description: "Today's entries" },
   { command: "recent", description: "Recent entries [n]" },
   { command: "stats", description: "Summary stats" },
+  { command: "agenda", description: "Upcoming calendar events" },
   { command: "labs", description: "Latest bloodwork" },
   { command: "analyze", description: "Correlation analysis [question]" },
   { command: "bloat", description: "Facial-bloating investigation" },

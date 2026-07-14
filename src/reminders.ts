@@ -13,7 +13,7 @@ interface Reminder {
  * Edit freely — these are personal defaults.
  */
 const REMINDERS: Reminder[] = [
-  { cron: "0 8 * * *", text: "📸 Morning selfie time. Same spot, same light, same angle as always — that's what makes the bloat trend meaningful." },
+  { cron: "0 8 * * *", text: "📸 Morning selfie — keep it consistent or the trend is noise: within 30 min of waking, BEFORE coffee, same spot, neutral daylight (not warm indoor), no post-shower, neutral expression." },
   { cron: "5 8 * * *", text: "⚖️ Weigh-in: reply with e.g. \"weight 178 lbs\"." },
   { cron: "10 8 * * *", text: "🧠 How do you feel this morning? e.g. \"mood good, energetic\" or \"groggy and puffy, 4/10\"." },
   { cron: "30 12 * * *", text: "🍽️ Lunch log — what did you eat/drink? Don't forget alcohol." },

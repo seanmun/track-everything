@@ -5,6 +5,7 @@ import { createBot, BOT_COMMANDS } from "./bot.js";
 import { startHttpServer } from "./http.js";
 import { startScheduler } from "./scheduler.js";
 import { startReminders } from "./reminders.js";
+import { startEventReminders } from "./eventReminders.js";
 
 async function main(): Promise<void> {
   console.log("[boot] LifeLog starting…");
@@ -19,6 +20,7 @@ async function main(): Promise<void> {
   const scheduler = startScheduler();
   const bot = createBot();
   const reminderTasks = startReminders(bot);
+  const eventTasks = startEventReminders(bot);
 
   await bot.api.setMyCommands(BOT_COMMANDS).catch(() => {
     /* non-fatal */
@@ -33,6 +35,7 @@ async function main(): Promise<void> {
     try {
       scheduler.stop();
       for (const t of reminderTasks) t.stop();
+      for (const t of eventTasks) t.stop();
       await bot.stop();
       httpServer.close();
       closeDb();

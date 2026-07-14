@@ -13,6 +13,7 @@ const CATEGORIES = [
   "environment",
   "routine",
   "note",
+  "event",
 ] as const;
 
 const parsedEntrySchema = z.object({

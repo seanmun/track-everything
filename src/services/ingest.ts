@@ -4,9 +4,11 @@ import {
   messages,
   entries,
   biomarkers,
+  events,
   type Message,
   type NewEntry,
 } from "../db/schema.js";
+import { createEvent } from "./events.js";
 import { nowIso } from "../util/time.js";
 import type { FileKind } from "../util/files.js";
 import { parseText, type ParsedEntry } from "../llm/parser.js";
@@ -52,6 +54,37 @@ function setMessageStatus(
     .run();
 }
 
+/**
+ * Create calendar events for any "event" entries in the parse, returning a
+ * text suffix (confirmations + conflict warnings) to append to the reply.
+ */
+function createEventsFromParsed(messageId: number, parsed: ParsedEntry[]): string {
+  const lines: string[] = [];
+  for (const e of parsed) {
+    if (e.category !== "event") continue;
+    const d = e.data as Record<string, unknown>;
+    const { event, conflicts } = createEvent({
+      messageId,
+      title: typeof d.title === "string" && d.title ? d.title : e.summary,
+      startTime: e.event_time,
+      endTime: typeof d.end === "string" ? d.end : null,
+      location: typeof d.location === "string" ? d.location : null,
+      notes: typeof d.notes === "string" ? d.notes : null,
+      allDay: d.allDay === true,
+      remindMinutesBefore: typeof d.remindMinutesBefore === "number" ? d.remindMinutesBefore : null,
+    });
+    const when = event.allDay ? "(all day)" : event.startTime.slice(11, 16);
+    lines.push(`🗓️ Event saved: "${event.title}" ${when}${event.remindAt ? " — I'll remind you" : ""}.`);
+    if (conflicts.length > 0) {
+      const clash = conflicts
+        .map((c) => `"${c.title}" (${c.allDay ? "all day" : c.startTime.slice(11, 16)})`)
+        .join(", ");
+      lines.push(`⚠️ Conflict: this overlaps ${clash}.`);
+    }
+  }
+  return lines.length ? `\n\n${lines.join("\n")}` : "";
+}
+
 function insertParsedEntries(messageId: number, parsed: ParsedEntry[]): void {
   if (parsed.length === 0) return;
   const rows: NewEntry[] = parsed.map((e) => ({
@@ -91,8 +124,9 @@ export async function ingestText(opts: {
   try {
     const { entries: parsed, raw } = await parseText(opts.text, opts.messageTimeIso);
     insertParsedEntries(messageId, parsed);
+    const eventNotes = createEventsFromParsed(messageId, parsed);
     setMessageStatus(messageId, parsed.length ? "ok" : "empty", raw);
-    return formatParsedReply(parsed);
+    return formatParsedReply(parsed) + eventNotes;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     setMessageStatus(messageId, "failed", null, msg);
@@ -128,10 +162,14 @@ export async function ingestPhoto(opts: {
     messageTime: opts.messageTimeIso,
   });
 
-  const prior = getLastVisionScore(messageId);
+  const prev = getPreviousSelfie();
 
   try {
-    const { result, raw } = await analyzeImage(opts.filePath, opts.caption);
+    const { result, raw } = await analyzeImage(opts.filePath, {
+      caption: opts.caption,
+      previousImagePath: prev?.filePath ?? undefined,
+      previousScore: prev?.score ?? null,
+    });
     db.insert(entries)
       .values({
         messageId,
@@ -145,7 +183,7 @@ export async function ingestPhoto(opts: {
       })
       .run();
     setMessageStatus(messageId, "ok", raw);
-    return formatVisionReply(result, prior);
+    return formatVisionReply(result, prev?.score ?? null);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     setMessageStatus(messageId, "failed", null, msg);
@@ -153,21 +191,25 @@ export async function ingestPhoto(opts: {
   }
 }
 
-function getLastVisionScore(beforeMessageId: number): number | null {
+/** The user's most recent vision selfie (its image path + score), or null. */
+function getPreviousSelfie(): { filePath: string | null; score: number | null } | null {
   const row = db
-    .select()
+    .select({ data: entries.data, filePath: messages.filePath })
     .from(entries)
+    .leftJoin(messages, eq(entries.messageId, messages.id))
     .where(and(eq(entries.category, "appearance"), eq(entries.source, "vision")))
     .orderBy(desc(entries.createdAt))
     .limit(1)
     .get();
   if (!row) return null;
+  let score: number | null = null;
   try {
     const data = JSON.parse(row.data) as { faceBloatingScore?: number };
-    return typeof data.faceBloatingScore === "number" ? data.faceBloatingScore : null;
+    if (typeof data.faceBloatingScore === "number") score = data.faceBloatingScore;
   } catch {
-    return null;
+    /* ignore malformed data */
   }
+  return { filePath: row.filePath ?? null, score };
 }
 
 function formatVisionReply(result: VisionResult, priorScore: number | null): string {
@@ -339,11 +381,12 @@ async function reprocessOne(m: Message): Promise<void> {
   if (m.source === "telegram_text" && m.rawText) {
     const { entries: parsed, raw } = await parseText(m.rawText, msgTime);
     insertParsedEntries(m.id, parsed);
+    createEventsFromParsed(m.id, parsed);
     setMessageStatus(m.id, parsed.length ? "ok" : "empty", raw);
     return;
   }
   if (m.source === "telegram_photo" && m.filePath) {
-    const { result, raw } = await analyzeImage(m.filePath, m.rawText ?? undefined);
+    const { result, raw } = await analyzeImage(m.filePath, { caption: m.rawText ?? undefined });
     db.insert(entries)
       .values({
         messageId: m.id,
@@ -397,5 +440,7 @@ function deleteDerivedForMessages(messageIds: number[]): number {
     db.delete(biomarkers).where(inArray(biomarkers.entryId, entryIds)).run();
     db.delete(entries).where(inArray(entries.id, entryIds)).run();
   }
+  // Events are keyed to the message, not to entries.
+  db.delete(events).where(inArray(events.messageId, messageIds)).run();
   return entryIds.length;
 }

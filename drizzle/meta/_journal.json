@@ -8,6 +8,13 @@
       "when": 1781491467120,
       "tag": "0000_chunky_magdalene",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783994961891,
+      "tag": "0001_plain_puppet_master",
+      "breakpoints": true
     }
   ]
 }

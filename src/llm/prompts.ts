@@ -16,6 +16,7 @@ Assign each entry a category from this set:
 - environment: { type, value?, notes? } — EMF, grounding, floor, sleep location, weather.
 - routine: { type, value?, notes? } — melatonin, collagen, baking_soda, green_tea, red_light_therapy, red_light_glasses, blue_light_exposure, screen_type (projector/lcd/oled), magnesium, etc. Put dose/duration in value or notes.
 - note: { text }
+- event: { title, end?, location?, allDay?: boolean, remindMinutesBefore?: number, notes? } — a scheduled event/appointment/plan the user states ("dentist Thursday 3pm", "lunch with Sam tomorrow noon", "flight 6am Friday"). Put the START time in event_time (absolute ISO). "end" is ISO only if a duration/end is stated. Default remindMinutesBefore to 60 if unspecified. Use allDay true for whole-day items with no clock time. Distinguish an event (scheduled, future, to attend) from a routine/exercise LOG of something already done — "dentist at 3pm Thursday" is an event; "went to the dentist" is a note.
 
 Put any detail that does not fit the named fields into \`data\` freely — NEVER discard information. Generate a short one-line \`summary\` for each entry. A single message may yield multiple entries.
 
@@ -24,8 +25,19 @@ Return ONLY JSON, no prose, no markdown fences:
 }
 
 /** System prompt for the vision analyzer (§8). */
-export function visionSystemPrompt(): string {
+export function visionSystemPrompt(hasReference: boolean): string {
+  const scoringGuidance = hasReference
+    ? `You are given TWO photos: a REFERENCE (the user's previous selfie) first, then the NEW selfie to score. Judge the NEW selfie RELATIVE to the reference. Ask: is the face MORE or LESS puffy/swollen than the reference (cheeks, jaw, under-eyes)? Set faceBloatingScore for the NEW photo accordingly — clearly puffier than the reference => a higher number than the reference's; clearly less => lower; genuinely indistinguishable => the same. Anchor to the concrete visual difference you see.`
+    : `Score this single selfie on an absolute 0-10 scale.`;
+
   return `You are analyzing a self-portrait photo from a user tracking facial bloating and skin/appearance over time. Objectively and clinically describe ONLY what is visible. Do not guess causes; you are not diagnosing — this is descriptive tracking.
+
+${scoringGuidance}
+
+CRITICAL SCORING RULES:
+- USE THE FULL 0-10 RANGE and COMMIT to a specific number. Do NOT default to 5 as a safe middle — a flat, unchanging score is useless for tracking. If you are unsure, still pick the number the evidence most supports and lower "confidence" instead.
+- In "otherObservations", state the SPECIFIC visual features that drove the faceBloatingScore (e.g. "cheeks fuller and rounder than reference", "under-eye bags more pronounced", "jawline less defined").
+- Separately note lighting/angle/time-of-day/expression differences as caveats in "otherObservations", since those strongly affect apparent puffiness — but still commit to a score.
 
 Return ONLY JSON, no prose, no markdown fences:
 {
@@ -37,9 +49,7 @@ Return ONLY JSON, no prose, no markdown fences:
   "jawlineDefinition": "sharp" | "moderate" | "soft",
   "otherObservations": string[],
   "confidence": 0-1
-}
-
-Judge only from the image. Note any lighting/angle/time-of-day caveats in otherObservations, since those strongly affect apparent puffiness.`;
+}`;
 }
 
 /** System prompt for the bloodwork extractor (§9). */

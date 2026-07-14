@@ -93,6 +93,32 @@ export const biomarkers = sqliteTable(
   }),
 );
 
+/**
+ * events — calendar events the user tells the bot in natural language.
+ * Drives reminders and conflict detection.
+ */
+export const events = sqliteTable(
+  "events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    messageId: integer("message_id").references(() => messages.id),
+    title: text("title").notNull(),
+    startTime: text("start_time").notNull(),
+    endTime: text("end_time"),
+    allDay: integer("all_day", { mode: "boolean" }).notNull().default(false),
+    location: text("location"),
+    notes: text("notes"),
+    // when to fire the reminder (ISO); null = no reminder
+    remindAt: text("remind_at"),
+    reminded: integer("reminded", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => ({
+    startIdx: index("events_start_idx").on(t.startTime),
+    remindIdx: index("events_remind_idx").on(t.remindAt),
+  }),
+);
+
 export type Message = typeof messages.$inferSelect;
 export type NewMessage = typeof messages.$inferInsert;
 export type Entry = typeof entries.$inferSelect;
@@ -100,3 +126,5 @@ export type NewEntry = typeof entries.$inferInsert;
 export type OuraToken = typeof ouraTokens.$inferSelect;
 export type Biomarker = typeof biomarkers.$inferSelect;
 export type NewBiomarker = typeof biomarkers.$inferInsert;
+export type Event = typeof events.$inferSelect;
+export type NewEvent = typeof events.$inferInsert;
